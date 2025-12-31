@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from matplotlib.pyplot import grid
 import numpy as np
 import random as rnd
 from threading import Thread
@@ -23,7 +24,115 @@ class Board:
 
 
     def eval(self, player):
-        return 0
+        score = 0
+        opponent = 1 if player == 2 else 2
+
+        # Centre
+        for row in range(6):
+            if self.grid[3][row] == player:
+                score += 3
+            elif self.grid[3][row] == opponent:
+                score -= 3
+
+        # Pour chaque fenêtre de 4 :
+        # Horizontal
+        for row in range(6):
+            for col in range(4):
+                window = self.grid[col:col + 4, row]
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+
+        # Vertical
+        for col in range(7):
+            for row in range(3):
+                window = self.grid[col, row:row + 4]
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+
+        # Diagonal (bottom-left to top-right)
+        for col in range(4):
+            for row in range(3):
+                window = [self.grid[col + i][row + i] for i in range(4)]
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+        
+        # Diagonal (top-left to bottom-right)
+        for col in range(4):
+            for row in range(3, 6):
+                window = [self.grid[col + i][row - i] for i in range(4)]
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+
+        return score
+
 
     def copy(self):
         new_board = Board()
