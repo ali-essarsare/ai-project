@@ -86,7 +86,7 @@ class Board:
         # Diagonal (bottom-left to top-right)
         for col in range(4):
             for row in range(3):
-                window = [self.grid[col + i][row + i] for i in range(4)]
+                window = np.array([self.grid[col + i][row + i] for i in range(4)])
 
                 count_player = np.count_nonzero(window == player)
                 count_opponent = np.count_nonzero(window == opponent)
@@ -110,7 +110,7 @@ class Board:
         # Diagonal (top-left to bottom-right)
         for col in range(4):
             for row in range(3, 6):
-                window = [self.grid[col + i][row - i] for i in range(4)]
+                window = np.array([self.grid[col + i][row - i] for i in range(4)])
 
                 count_player = np.count_nonzero(window == player)
                 count_opponent = np.count_nonzero(window == opponent)
