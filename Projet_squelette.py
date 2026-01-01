@@ -18,20 +18,43 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     opponent = 1 if max_player == 2 else 2
     depth_limit = max(1, ai_level)
 
-    def opponent_can_win_next(board):
-        for opp_move in board.get_possible_moves():
+    def is_winning_move(board, move, player):
+        tmp = board.copy()
+        tmp.add_disk(move, player, update_display=False)
+        return tmp.check_victory() == player
+    
+    def winning_moves(board, player):
+        return [
+            move for move in board.get_possible_moves()
+            if is_winning_move(board, move, player)
+        ]
+    
+    def is_fork(board, move, player):
+        tmp = board.copy()
+        tmp.add_disk(move, player, update_display=False)
+        return len(winning_moves(tmp, player)) >= 2
+
+    def fork_moves(board, player):
+        return [
+            move for move in board.get_possible_moves()
+            if is_fork(board, move, player)
+        ]
+
+    def opponent_fork_moves(board, opponent):
+        forks = []
+        for move in board.get_possible_moves():
             tmp = board.copy()
-            tmp.add_disk(opp_move, opponent, update_display=False)
-            if tmp.check_victory() == opponent:
-                return True
-        return False
+            tmp.add_disk(move, opponent, update_display=False)
+            if len(winning_moves(tmp, opponent)) >= 2:
+                forks.append(move)
+        return forks
 
     def max_value(board, alpha, beta, depth):
         w = board.check_victory()
         if w == max_player:
-            return 1_000_000
+            return 1_000_000 + depth
         elif w == opponent:
-            return -1_000_000
+            return -1_000_000 - depth
         elif depth == 0:
             return board.eval(max_player)
 
@@ -48,9 +71,9 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     def min_value(board, alpha, beta, depth):
         w = board.check_victory()
         if w == max_player:
-            return 1_000_000
+            return 1_000_000 + depth
         elif w == opponent:
-            return -1_000_000
+            return -1_000_000 - depth
         elif depth == 0:
             return board.eval(max_player)
 
@@ -67,40 +90,67 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     best_score = -float('inf')
     best_move = None
 
-    safe_moves = []
+    possible_moves = board.get_possible_moves()
 
-    for move in board.get_possible_moves():
-        new_board = board.copy()
-        new_board.add_disk(move, max_player, update_display=False)
-
-        # Immediate win → take it
-        if new_board.check_victory() == max_player:
+    # Immediate win
+    for move in possible_moves:
+        if is_winning_move(board, move, max_player):
             queue.put(move)
             return
 
-        # Immediate loss → reject
-        if opponent_can_win_next(new_board):
-            continue
+    # Block opponent immediate win
+    opp_wins = winning_moves(board, opponent)
+    if opp_wins:
+        queue.put(opp_wins[0])
+        return
+    
+    # Block opponent forks
+    opp_forks = opponent_fork_moves(board, opponent)
+    if opp_forks:
+        # Try to block the fork by playing in one of the fork columns
+        for move in possible_moves:
+            tmp = board.copy()
+            tmp.add_disk(move, max_player, update_display=False)
+            if not opponent_fork_moves(tmp, opponent):
+                queue.put(move)
+                return
 
-        safe_moves.append(move)
+        # If no clean block exists, force best defense
+        queue.put(opp_forks[0])
+        return
+    
+    # Create a fork if possible
+    forks = fork_moves(board, max_player)
+    if forks:
+        queue.put(forks[0])
+        return
 
+    # Avoid giving opponent an immediate win
+    safe_moves = []
+    for move in possible_moves:
+        tmp = board.copy()
+        tmp.add_disk(move, max_player, update_display=False)
 
-    moves_to_evaluate = safe_moves if safe_moves else board.get_possible_moves()
+        if not winning_moves(tmp, opponent):
+            safe_moves.append(move)
 
+    moves_to_evaluate = safe_moves if safe_moves else possible_moves
+
+    # Strategic evaluation (alpha–beta)
     best_score = -float('inf')
     best_move = None
 
     for move in moves_to_evaluate:
-        new_board = board.copy()
-        new_board.add_disk(move, max_player, update_display=False)
-
-        score = min_value(new_board, -float('inf'), float('inf'), depth_limit - 1)
+        tmp = board.copy()
+        tmp.add_disk(move, max_player, update_display=False)
+        score = min_value(tmp, -float('inf'), float('inf'), depth_limit - 1)
 
         if score > best_score:
             best_score = score
             best_move = move
 
     queue.put(best_move)
+
 
 class Board:
     grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
