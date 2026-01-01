@@ -15,9 +15,13 @@ for i in range(42):
     player_type.append('AI: alpha-beta level '+str(i+1))
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
-    opponent = 2 if max_player == 1 else 1
+    opponent = 1 if max_player == 2 else 2
+    depth_limit = max(1, ai_level)
+
     def max_value(board, alpha, beta, depth):
-        if depth == 0 or board.check_victory():
+        if board.check_victory():
+            return 1000000
+        if depth == 0:
             return board.eval(max_player)
 
         v = -float('inf')
@@ -31,7 +35,9 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         return v
 
     def min_value(board, alpha, beta, depth):
-        if depth == 0 or board.check_victory():
+        if board.check_victory():
+            return -1000000
+        if depth == 0:
             return board.eval(max_player)
 
         v = float('inf')
@@ -50,7 +56,7 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     for move in board.get_possible_moves():
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
-        score = min_value(new_board, -float('inf'), float('inf'), ai_level - 1)
+        score = min_value(new_board, -float('inf'), float('inf'), depth_limit - 1)
 
         if score > best_score:
             best_score = score
