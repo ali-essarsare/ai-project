@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
+from matplotlib.pyplot import grid
 import numpy as np
 import random as rnd
 from threading import Thread
@@ -14,8 +15,142 @@ for i in range(42):
     player_type.append('AI: alpha-beta level '+str(i+1))
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
-    # random move (to modify)
-    queue.put(board.get_possible_moves()[rnd.randint(0, len(board.get_possible_moves()) - 1)])
+    opponent = 1 if max_player == 2 else 2
+    depth_limit = max(1, ai_level)
+
+    def is_winning_move(board, move, player):
+        tmp = board.copy()
+        tmp.add_disk(move, player, update_display=False)
+        return tmp.check_victory() == player
+    
+    def winning_moves(board, player):
+        return [
+            move for move in board.get_possible_moves()
+            if is_winning_move(board, move, player)
+        ]
+    
+    def is_fork(board, move, player):
+        tmp = board.copy()
+        tmp.add_disk(move, player, update_display=False)
+        return len(winning_moves(tmp, player)) >= 2
+
+    def fork_moves(board, player):
+        return [
+            move for move in board.get_possible_moves()
+            if is_fork(board, move, player)
+        ]
+
+    def opponent_fork_moves(board, opponent):
+        forks = []
+        for move in board.get_possible_moves():
+            tmp = board.copy()
+            tmp.add_disk(move, opponent, update_display=False)
+            if len(winning_moves(tmp, opponent)) >= 2:
+                forks.append(move)
+        return forks
+
+    def max_value(board, alpha, beta, depth):
+        w = board.check_victory()
+        if w == max_player:
+            return 1_000_000 + depth
+        elif w == opponent:
+            return -1_000_000 - depth
+        elif depth == 0:
+            return board.eval(max_player)
+
+        v = -float('inf')
+        for move in board.get_possible_moves():
+            new_board = board.copy()
+            new_board.add_disk(move, max_player, update_display=False)
+            v = max(v, min_value(new_board, alpha, beta, depth - 1))
+            if v >= beta:
+                return v
+            alpha = max(alpha, v)
+        return v
+
+    def min_value(board, alpha, beta, depth):
+        w = board.check_victory()
+        if w == max_player:
+            return 1_000_000 + depth
+        elif w == opponent:
+            return -1_000_000 - depth
+        elif depth == 0:
+            return board.eval(max_player)
+
+        v = float('inf')
+        for move in board.get_possible_moves():
+            new_board = board.copy()
+            new_board.add_disk(move, opponent, update_display=False)
+            v = min(v, max_value(new_board, alpha, beta, depth - 1))
+            if v <= alpha:
+                return v
+            beta = min(beta, v)
+        return v
+
+    best_score = -float('inf')
+    best_move = None
+
+    possible_moves = board.get_possible_moves()
+
+    # Immediate win
+    for move in possible_moves:
+        if is_winning_move(board, move, max_player):
+            queue.put(move)
+            return
+
+    # Block opponent immediate win
+    opp_wins = winning_moves(board, opponent)
+    if opp_wins:
+        queue.put(opp_wins[0])
+        return
+    
+    # Block opponent forks
+    opp_forks = opponent_fork_moves(board, opponent)
+    if opp_forks:
+        # Try to block the fork by playing in one of the fork columns
+        for move in possible_moves:
+            tmp = board.copy()
+            tmp.add_disk(move, max_player, update_display=False)
+            if not opponent_fork_moves(tmp, opponent):
+                queue.put(move)
+                return
+
+        # If no clean block exists, force best defense
+        queue.put(opp_forks[0])
+        return
+    
+    # Create a fork if possible
+    forks = fork_moves(board, max_player)
+    if forks:
+        queue.put(forks[0])
+        return
+
+    # Avoid giving opponent an immediate win
+    safe_moves = []
+    for move in possible_moves:
+        tmp = board.copy()
+        tmp.add_disk(move, max_player, update_display=False)
+
+        if not winning_moves(tmp, opponent):
+            safe_moves.append(move)
+
+    moves_to_evaluate = safe_moves if safe_moves else possible_moves
+
+    # Strategic evaluation (alpha–beta)
+    best_score = -float('inf')
+    best_move = None
+
+    for move in moves_to_evaluate:
+        tmp = board.copy()
+        tmp.add_disk(move, max_player, update_display=False)
+        score = min_value(tmp, -float('inf'), float('inf'), depth_limit - 1)
+
+        if score > best_score:
+            best_score = score
+            best_move = move
+
+    queue.put(best_move)
+
 
 class Board:
     grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
@@ -23,7 +158,115 @@ class Board:
 
 
     def eval(self, player):
-        return 0
+        score = 0
+        opponent = 1 if player == 2 else 2
+
+        # Centre
+        for row in range(6):
+            if self.grid[3][row] == player:
+                score += 3
+            elif self.grid[3][row] == opponent:
+                score -= 3
+
+        # Pour chaque fenêtre de 4 :
+        # Horizontal
+        for row in range(6):
+            for col in range(4):
+                window = self.grid[col:col + 4, row]
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+
+        # Vertical
+        for col in range(7):
+            for row in range(3):
+                window = self.grid[col, row:row + 4]
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+
+        # Diagonal (bottom-left to top-right)
+        for col in range(4):
+            for row in range(3):
+                window = np.array([self.grid[col + i][row + i] for i in range(4)])
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+        
+        # Diagonal (top-left to bottom-right)
+        for col in range(4):
+            for row in range(3, 6):
+                window = np.array([self.grid[col + i][row - i] for i in range(4)])
+
+                count_player = np.count_nonzero(window == player)
+                count_opponent = np.count_nonzero(window == opponent)
+                count_empty = np.count_nonzero(window == 0)
+
+                if count_player > 0 and count_opponent > 0:
+                    continue
+
+                if count_player == 4:
+                    score += 100000
+                elif count_player == 3 and count_empty == 1:
+                    score += 100
+                elif count_player == 2 and count_empty == 2:
+                    score += 10
+
+                if count_opponent == 3 and count_empty == 1:
+                    score -= 80
+                elif count_opponent == 4:
+                    score -= 100000
+
+        return score
+
 
     def copy(self):
         new_board = Board()
@@ -59,27 +302,32 @@ class Board:
         return self.grid[column][5] != 0
 
     def check_victory(self):
-        # Horizontal alignment check
+        # Horizontal
         for line in range(6):
-            for horizontal_shift in range(4):
-                if self.grid[horizontal_shift][line] == self.grid[horizontal_shift + 1][line] == self.grid[horizontal_shift + 2][line] == self.grid[horizontal_shift + 3][line] != 0:
-                    return True
-        # Vertical alignment check
-        for column in range(7):
-            for vertical_shift in range(3):
-                if self.grid[column][vertical_shift] == self.grid[column][vertical_shift + 1] == \
-                        self.grid[column][vertical_shift + 2] == self.grid[column][vertical_shift + 3] != 0:
-                    return True
-        # Diagonal alignment check
-        for horizontal_shift in range(4):
-            for vertical_shift in range(3):
-                if self.grid[horizontal_shift][vertical_shift] == self.grid[horizontal_shift + 1][vertical_shift + 1] ==\
-                        self.grid[horizontal_shift + 2][vertical_shift + 2] == self.grid[horizontal_shift + 3][vertical_shift + 3] != 0:
-                    return True
-                elif self.grid[horizontal_shift][5 - vertical_shift] == self.grid[horizontal_shift + 1][4 - vertical_shift] ==\
-                        self.grid[horizontal_shift + 2][3 - vertical_shift] == self.grid[horizontal_shift + 3][2 - vertical_shift] != 0:
-                    return True
-        return False
+            for col in range(4):
+                v = self.grid[col][line]
+                if v != 0 and v == self.grid[col+1][line] == self.grid[col+2][line] == self.grid[col+3][line]:
+                    return v
+
+        # Vertical
+        for col in range(7):
+            for row in range(3):
+                v = self.grid[col][row]
+                if v != 0 and v == self.grid[col][row+1] == self.grid[col][row+2] == self.grid[col][row+3]:
+                    return v
+
+        # Diagonals
+        for col in range(4):
+            for row in range(3):
+                v = self.grid[col][row]
+                if v != 0 and v == self.grid[col+1][row+1] == self.grid[col+2][row+2] == self.grid[col+3][row+3]:
+                    return v
+
+                v = self.grid[col][row+3]
+                if v != 0 and v == self.grid[col+1][row+2] == self.grid[col+2][row+1] == self.grid[col+3][row]:
+                    return v
+
+        return 0
 
 
 class Connect4:
