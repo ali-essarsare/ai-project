@@ -14,8 +14,48 @@ for i in range(42):
     player_type.append('AI: alpha-beta level '+str(i+1))
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
-    # random move (to modify)
-    queue.put(board.get_possible_moves()[rnd.randint(0, len(board.get_possible_moves()) - 1)])
+    opponent = 2 if max_player == 1 else 1
+    def max_value(board, alpha, beta, depth):
+        if depth == 0 or board.check_victory():
+            return board.eval(max_player)
+
+        v = -float('inf')
+        for move in board.get_possible_moves():
+            new_board = board.copy()
+            new_board.add_disk(move, max_player, update_display=False)
+            v = max(v, min_value(new_board, alpha, beta, depth - 1))
+            if v >= beta:
+                return v
+            alpha = max(alpha, v)
+        return v
+
+    def min_value(board, alpha, beta, depth):
+        if depth == 0 or board.check_victory():
+            return board.eval(max_player)
+
+        v = float('inf')
+        for move in board.get_possible_moves():
+            new_board = board.copy()
+            new_board.add_disk(move, opponent, update_display=False)
+            v = min(v, max_value(new_board, alpha, beta, depth - 1))
+            if v <= alpha:
+                return v
+            beta = min(beta, v)
+        return v
+
+    best_score = -float('inf')
+    best_move = None
+
+    for move in board.get_possible_moves():
+        new_board = board.copy()
+        new_board.add_disk(move, max_player, update_display=False)
+        score = min_value(new_board, -float('inf'), float('inf'), ai_level - 1)
+
+        if score > best_score:
+            best_score = score
+            best_move = move
+
+    queue.put(best_move)
 
 class Board:
     grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
