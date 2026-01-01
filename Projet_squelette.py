@@ -18,10 +18,21 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     opponent = 1 if max_player == 2 else 2
     depth_limit = max(1, ai_level)
 
+    def opponent_can_win_next(board):
+        for opp_move in board.get_possible_moves():
+            tmp = board.copy()
+            tmp.add_disk(opp_move, opponent, update_display=False)
+            if tmp.check_victory() == opponent:
+                return True
+        return False
+
     def max_value(board, alpha, beta, depth):
-        if board.check_victory():
-            return 1000000
-        if depth == 0:
+        w = board.check_victory()
+        if w == max_player:
+            return 1_000_000
+        elif w == opponent:
+            return -1_000_000
+        elif depth == 0:
             return board.eval(max_player)
 
         v = -float('inf')
@@ -35,9 +46,12 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         return v
 
     def min_value(board, alpha, beta, depth):
-        if board.check_victory():
-            return -1000000
-        if depth == 0:
+        w = board.check_victory()
+        if w == max_player:
+            return 1_000_000
+        elif w == opponent:
+            return -1_000_000
+        elif depth == 0:
             return board.eval(max_player)
 
         v = float('inf')
@@ -53,9 +67,33 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     best_score = -float('inf')
     best_move = None
 
+    safe_moves = []
+
     for move in board.get_possible_moves():
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
+
+        # Immediate win → take it
+        if new_board.check_victory() == max_player:
+            queue.put(move)
+            return
+
+        # Immediate loss → reject
+        if opponent_can_win_next(new_board):
+            continue
+
+        safe_moves.append(move)
+
+
+    moves_to_evaluate = safe_moves if safe_moves else board.get_possible_moves()
+
+    best_score = -float('inf')
+    best_move = None
+
+    for move in moves_to_evaluate:
+        new_board = board.copy()
+        new_board.add_disk(move, max_player, update_display=False)
+
         score = min_value(new_board, -float('inf'), float('inf'), depth_limit - 1)
 
         if score > best_score:
@@ -214,27 +252,32 @@ class Board:
         return self.grid[column][5] != 0
 
     def check_victory(self):
-        # Horizontal alignment check
+        # Horizontal
         for line in range(6):
-            for horizontal_shift in range(4):
-                if self.grid[horizontal_shift][line] == self.grid[horizontal_shift + 1][line] == self.grid[horizontal_shift + 2][line] == self.grid[horizontal_shift + 3][line] != 0:
-                    return True
-        # Vertical alignment check
-        for column in range(7):
-            for vertical_shift in range(3):
-                if self.grid[column][vertical_shift] == self.grid[column][vertical_shift + 1] == \
-                        self.grid[column][vertical_shift + 2] == self.grid[column][vertical_shift + 3] != 0:
-                    return True
-        # Diagonal alignment check
-        for horizontal_shift in range(4):
-            for vertical_shift in range(3):
-                if self.grid[horizontal_shift][vertical_shift] == self.grid[horizontal_shift + 1][vertical_shift + 1] ==\
-                        self.grid[horizontal_shift + 2][vertical_shift + 2] == self.grid[horizontal_shift + 3][vertical_shift + 3] != 0:
-                    return True
-                elif self.grid[horizontal_shift][5 - vertical_shift] == self.grid[horizontal_shift + 1][4 - vertical_shift] ==\
-                        self.grid[horizontal_shift + 2][3 - vertical_shift] == self.grid[horizontal_shift + 3][2 - vertical_shift] != 0:
-                    return True
-        return False
+            for col in range(4):
+                v = self.grid[col][line]
+                if v != 0 and v == self.grid[col+1][line] == self.grid[col+2][line] == self.grid[col+3][line]:
+                    return v
+
+        # Vertical
+        for col in range(7):
+            for row in range(3):
+                v = self.grid[col][row]
+                if v != 0 and v == self.grid[col][row+1] == self.grid[col][row+2] == self.grid[col][row+3]:
+                    return v
+
+        # Diagonals
+        for col in range(4):
+            for row in range(3):
+                v = self.grid[col][row]
+                if v != 0 and v == self.grid[col+1][row+1] == self.grid[col+2][row+2] == self.grid[col+3][row+3]:
+                    return v
+
+                v = self.grid[col][row+3]
+                if v != 0 and v == self.grid[col+1][row+2] == self.grid[col+2][row+1] == self.grid[col+3][row]:
+                    return v
+
+        return 0
 
 
 class Connect4:
