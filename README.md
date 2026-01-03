@@ -103,7 +103,7 @@ Tkinter is included by default with most Python distributions.
 
 Clone the repository:
 
-  git clone https://gitlab.com/ali-essarsare/ai-project.git
+  git clone https://github.com/ali-essarsare/ai-project.git
   cd connect4-alpha-beta
 
 
