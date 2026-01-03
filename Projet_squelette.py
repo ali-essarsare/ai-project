@@ -71,9 +71,9 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     def min_value(board, alpha, beta, depth):
         w = board.check_victory()
         if w == max_player:
-            return 1_000_000 + depth
+            return 1_000_000
         elif w == opponent:
-            return -1_000_000 - depth
+            return -1_000_000
         elif depth == 0:
             return board.eval(max_player)
 
@@ -156,117 +156,106 @@ class Board:
     grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
                      [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]])
 
+    def is_playable(self, col, row):
+        return row == 0 or self.grid[col][row - 1] != 0
+    
+    def score_window(self, window, coords, player):
+        opponent = 1 if player == 2 else 2
 
+        count_p = np.count_nonzero(window == player)
+        count_o = np.count_nonzero(window == opponent)
+        empties = [(c, r) for (c, r), v in zip(coords, window) if v == 0]
+
+        if count_o > 0 and count_p > 0:
+            return 0
+
+        # WIN
+        if count_p == 4:
+            return 1_000_000
+
+        # IMMEDIATE WIN THREAT
+        if count_p == 3 and len(empties) == 1:
+            c, r = empties[0]
+            if self.is_playable(c, r):
+                return 50_000
+            return 200  # future threat
+
+        # TWO-IN-A-ROW
+        if count_p == 2 and len(empties) == 2:
+            playable = sum(self.is_playable(c, r) for c, r in empties)
+            if playable == 2:
+                return 500
+            elif playable == 1:
+                return 50
+
+        # BLOCK OPPONENT
+        if count_o == 3 and len(empties) == 1:
+            c, r = empties[0]
+            if self.is_playable(c, r):
+                return -80_000
+
+        return 0   
+                          
+    
+    def winning_moves(self, player):
+        wins = []
+        for move in self.get_possible_moves():
+            tmp = self.copy()
+            tmp.add_disk(move, player, update_display=False)
+            if tmp.check_victory() == player:
+                wins.append(move)
+        return wins
+    
     def eval(self, player):
         score = 0
-        opponent = 1 if player == 2 else 2
 
         # Centre
         for row in range(6):
             if self.grid[3][row] == player:
-                score += 3
-            elif self.grid[3][row] == opponent:
-                score -= 3
+                score += 6
 
         # Pour chaque fenêtre de 4 :
         # Horizontal
         for row in range(6):
             for col in range(4):
-                window = self.grid[col:col + 4, row]
-
-                count_player = np.count_nonzero(window == player)
-                count_opponent = np.count_nonzero(window == opponent)
-                count_empty = np.count_nonzero(window == 0)
-
-                if count_player > 0 and count_opponent > 0:
-                    continue
-
-                if count_player == 4:
-                    score += 100000
-                elif count_player == 3 and count_empty == 1:
-                    score += 100
-                elif count_player == 2 and count_empty == 2:
-                    score += 10
-
-                if count_opponent == 3 and count_empty == 1:
-                    score -= 80
-                elif count_opponent == 4:
-                    score -= 100000
+                window = self.grid[col:col+4, row]
+                coords = [(col+i, row) for i in range(4)]
+                score += self.score_window(window, coords, player)
 
         # Vertical
         for col in range(7):
             for row in range(3):
-                window = self.grid[col, row:row + 4]
-
-                count_player = np.count_nonzero(window == player)
-                count_opponent = np.count_nonzero(window == opponent)
-                count_empty = np.count_nonzero(window == 0)
-
-                if count_player > 0 and count_opponent > 0:
-                    continue
-
-                if count_player == 4:
-                    score += 100000
-                elif count_player == 3 and count_empty == 1:
-                    score += 100
-                elif count_player == 2 and count_empty == 2:
-                    score += 10
-
-                if count_opponent == 3 and count_empty == 1:
-                    score -= 80
-                elif count_opponent == 4:
-                    score -= 100000
+                window = self.grid[col, row:row+4]
+                coords = [(col, row+i) for i in range(4)]
+                score += self.score_window(window, coords, player)
 
         # Diagonal (bottom-left to top-right)
         for col in range(4):
             for row in range(3):
                 window = np.array([self.grid[col + i][row + i] for i in range(4)])
-
-                count_player = np.count_nonzero(window == player)
-                count_opponent = np.count_nonzero(window == opponent)
-                count_empty = np.count_nonzero(window == 0)
-
-                if count_player > 0 and count_opponent > 0:
-                    continue
-
-                if count_player == 4:
-                    score += 100000
-                elif count_player == 3 and count_empty == 1:
-                    score += 100
-                elif count_player == 2 and count_empty == 2:
-                    score += 10
-
-                if count_opponent == 3 and count_empty == 1:
-                    score -= 80
-                elif count_opponent == 4:
-                    score -= 100000
+                coords = [(col + i, row + i) for i in range(4)]
+                score += self.score_window(window, coords, player)
         
         # Diagonal (top-left to bottom-right)
         for col in range(4):
             for row in range(3, 6):
                 window = np.array([self.grid[col + i][row - i] for i in range(4)])
+                coords = [(col + i, row - i) for i in range(4)]
+                score += self.score_window(window, coords, player)
 
-                count_player = np.count_nonzero(window == player)
-                count_opponent = np.count_nonzero(window == opponent)
-                count_empty = np.count_nonzero(window == 0)
+        #fork opportunities
+        forks = 0
+        for move in self.get_possible_moves():
+            tmp = self.copy()
+            tmp.add_disk(move, player, update_display=False)
+            if len(tmp.winning_moves(player)) >= 2:
+                forks += 1
 
-                if count_player > 0 and count_opponent > 0:
-                    continue
+        score += forks * 15_000
 
-                if count_player == 4:
-                    score += 100000
-                elif count_player == 3 and count_empty == 1:
-                    score += 100
-                elif count_player == 2 and count_empty == 2:
-                    score += 10
-
-                if count_opponent == 3 and count_empty == 1:
-                    score -= 80
-                elif count_opponent == 4:
-                    score -= 100000
 
         return score
-
+    
 
     def copy(self):
         new_board = Board()
