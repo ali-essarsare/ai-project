@@ -71,9 +71,9 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     def min_value(board, alpha, beta, depth):
         w = board.check_victory()
         if w == max_player:
-            return 1_000_000 + depth
+            return 1_000_000
         elif w == opponent:
-            return -1_000_000 - depth
+            return -1_000_000
         elif depth == 0:
             return board.eval(max_player)
 
@@ -160,7 +160,6 @@ class Board:
         return row == 0 or self.grid[col][row - 1] != 0
     
     def score_window(self, window, coords, player):
-        score = 0
         opponent = 1 if player == 2 else 2
 
         count_p = np.count_nonzero(window == player)
@@ -195,17 +194,17 @@ class Board:
             if self.is_playable(c, r):
                 return -80_000
 
-        return score    
+        return 0   
                           
     
     def winning_moves(self, player):
-            wins = []
-            for move in self.get_possible_moves():
-                tmp = self.copy()
-                tmp.add_disk(move, player, update_display=False)
-                if tmp.check_victory() == player:
-                    wins.append(move)
-            return wins
+        wins = []
+        for move in self.get_possible_moves():
+            tmp = self.copy()
+            tmp.add_disk(move, player, update_display=False)
+            if tmp.check_victory() == player:
+                wins.append(move)
+        return wins
     
     def eval(self, player):
         score = 0
@@ -252,7 +251,7 @@ class Board:
             if len(tmp.winning_moves(player)) >= 2:
                 forks += 1
 
-        score += forks * 3_000
+        score += forks * 15_000
 
 
         return score
