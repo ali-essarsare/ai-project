@@ -48,7 +48,37 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
             if len(winning_moves(tmp, opponent)) >= 2:
                 forks.append(move)
         return forks
+    
+    def forced_move(board, moves):
+        """
+        Choisit un coup même perdant, en privilégiant
+        la terminaison rapide de la partie.
+        """
+        for move in moves:
+            tmp = board.copy()
+            tmp.add_disk(move, max_player, update_display=False)
+            if winning_moves(tmp, opponent):
+                return move
+        return moves[0]
 
+    def terminal_move(board, moves):
+        best = None
+        best_score = float('inf')
+
+        for move in moves:
+            tmp = board.copy()
+            tmp.add_disk(move, max_player, update_display=False)
+
+            if winning_moves(tmp, opponent):
+                return move
+
+            score = tmp.eval(max_player)
+            if score < best_score:
+                best_score = score
+                best = move
+
+        return best
+    
     def max_value(board, alpha, beta, depth):
         w = board.check_victory()
         if w == max_player:
@@ -134,7 +164,14 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         if not winning_moves(tmp, opponent):
             safe_moves.append(move)
 
+
+    if not safe_moves:
+        queue.put(terminal_move(board, possible_moves))
+        return
+
     moves_to_evaluate = safe_moves if safe_moves else possible_moves
+
+    
 
     # Strategic evaluation (alpha–beta)
     best_score = -float('inf')
@@ -148,6 +185,10 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         if score > best_score:
             best_score = score
             best_move = move
+
+    if best_move is None:
+        queue.put(forced_move(board, possible_moves))
+        return
 
     queue.put(best_move)
 
